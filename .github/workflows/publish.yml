@@ -53,7 +53,7 @@ jobs:
             fabric
 
           game-versions: |
-            1.21
+            [1.21, 1.21.1]
           game-version-filter: releases
 
           dependencies: |
