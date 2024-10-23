@@ -11,6 +11,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.Boat;
 import snownee.boattweaks.duck.BTServerPlayer;
 import snownee.boattweaks.network.SSyncDistancePacket;
+import snownee.kiwi.network.KPacketSender;
 
 @Mixin(ServerPlayer.class)
 public class ServerPlayerMixin implements BTServerPlayer {
@@ -22,7 +23,7 @@ public class ServerPlayerMixin implements BTServerPlayer {
 		if (!(entity instanceof Boat boat)) {
 			return;
 		}
-		SSyncDistancePacket.sync(boat, (ServerPlayer) (Object) this);
+		KPacketSender.send(new SSyncDistancePacket(boat), (ServerPlayer) (Object) this);
 	}
 
 	@Override

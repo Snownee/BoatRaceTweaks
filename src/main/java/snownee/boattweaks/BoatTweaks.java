@@ -7,9 +7,10 @@ import org.slf4j.Logger;
 import com.google.common.collect.Lists;
 import com.mojang.logging.LogUtils;
 
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenCustomHashMap;
-import net.minecraft.Util;
+import it.unimi.dsi.fastutil.objects.Reference2IntMap;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
+import net.fabricmc.fabric.api.gamerule.v1.GameRuleFactory;
+import net.fabricmc.fabric.api.gamerule.v1.GameRuleRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
@@ -21,24 +22,38 @@ import snownee.boattweaks.network.SUpdateGhostModePacket;
 import snownee.kiwi.AbstractModule;
 import snownee.kiwi.KiwiGO;
 import snownee.kiwi.KiwiModule;
+import snownee.kiwi.network.KPacketSender;
+import snownee.kiwi.util.KUtil;
 
 @KiwiModule
 public class BoatTweaks extends AbstractModule {
 
 	public static final String ID = "boattweaks";
 	public static final Logger LOGGER = LogUtils.getLogger();
-	public static final KiwiGO<SoundEvent> BOOST = go(() ->  SoundEvent.createVariableRangeEvent(new ResourceLocation(ID, "boost")));
-	public static final KiwiGO<SoundEvent> EJECT = go(() ->  SoundEvent.createVariableRangeEvent(new ResourceLocation(ID, "eject")));
-	public static final GameRules.Key<GameRules.BooleanValue> AUTO_REMOVE_BOAT = GameRules.register(ID + ":autoRemoveBoat", GameRules.Category.MISC, GameRules.BooleanValue.create(false));
-	public static final GameRules.Key<GameRules.BooleanValue> GHOST_MODE = GameRules.register(ID + ":ghostMode", GameRules.Category.MISC, GameRules.BooleanValue.create(false, (server, rule) -> {
-		server.getPlayerList().getPlayers().forEach(p -> {
-			SUpdateGhostModePacket.sync(p, rule.get());
-		});
-	}));
-	public static final Object2IntMap<Block> CUSTOM_SPECIAL_BLOCKS = new Object2IntOpenCustomHashMap<>(8, Util.identityStrategy());
+	public static final KiwiGO<SoundEvent> BOOST = go(() -> SoundEvent.createVariableRangeEvent(RL("boost")));
+	public static final KiwiGO<SoundEvent> EJECT = go(() -> SoundEvent.createVariableRangeEvent(RL("eject")));
+	public static final GameRules.Key<GameRules.BooleanValue> AUTO_REMOVE_BOAT = GameRuleRegistry.register(
+			ID + ":autoRemoveBoat",
+			GameRules.Category.MISC,
+			GameRuleFactory.createBooleanRule(false)
+	);
+	public static final GameRules.Key<GameRules.BooleanValue> GHOST_MODE = GameRuleRegistry.register(
+			ID + ":ghostMode",
+			GameRules.Category.MISC,
+			GameRuleFactory.createBooleanRule(false, (server, rule) -> {
+				server.getPlayerList().getPlayers().forEach(p -> {
+					KPacketSender.send(new SUpdateGhostModePacket(rule.get()), p);
+				});
+			})
+	);
+	public static final Reference2IntMap<Block> CUSTOM_SPECIAL_BLOCKS = new Reference2IntOpenHashMap<>(8);
 	public static final List<SpecialBlockEvent> SPECIAL_BLOCK_LISTENERS = Lists.newArrayList();
 
 	public static void postSpecialBlockEvent(Boat boat, BlockState blockState, BlockPos blockPos) {
 		SPECIAL_BLOCK_LISTENERS.forEach(listener -> listener.on(boat, blockState, blockPos));
+	}
+
+	public static ResourceLocation RL(String path) {
+		return KUtil.RL(path, ID);
 	}
 }

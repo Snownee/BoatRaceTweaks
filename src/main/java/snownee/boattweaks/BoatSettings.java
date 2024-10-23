@@ -1,193 +1,140 @@
 package snownee.boattweaks;
 
-import it.unimi.dsi.fastutil.objects.Object2FloatMap;
-import it.unimi.dsi.fastutil.objects.Object2FloatMaps;
-import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
+import com.mojang.datafixers.util.Pair;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+
+import io.netty.buffer.ByteBuf;
+import it.unimi.dsi.fastutil.objects.Reference2FloatMap;
+import it.unimi.dsi.fastutil.objects.Reference2FloatMaps;
+import it.unimi.dsi.fastutil.objects.Reference2FloatOpenHashMap;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
 // Normalize it to the vanilla values
-public class BoatSettings {
+public record BoatSettings(
+		Reference2FloatMap<Block> frictionOverrides,
+		float forwardForce,
+		float backwardForce,
+		float turningForce,
+		float turningForceInAir,
+		float stepUpHeight,
+		float outOfControlTicks,
+		Block boostingBlock,
+		int boostingTicks,
+		float boostingForce,
+		Block ejectingBlock,
+		float ejectingForce,
+		float wallHitSpeedLoss,
+		int wallHitCooldown,
+		float degradeForceLossPerMeter,
+		int degradeForceLossStartFrom,
+		float degradeForceMaxLoss) {
 	public static BoatSettings DEFAULT = new BoatSettings();
-	public Object2FloatMap<Block> frictionOverrides = Object2FloatMaps.emptyMap();
-	public float forwardForce = 0.04F;
-	public float backwardForce = 0.005F;
-	public float turningForce = 1F;
-	public float turningForceInAir = 1F;
-	public float stepUpHeight = 0F;
-	public float outOfControlTicks = 60F;
-	public Block boostingBlock = Blocks.AIR;
-	public int boostingTicks = 0;
-	public float boostingForce = 0F;
-	public Block ejectingBlock = Blocks.AIR;
-	public float ejectingForce = 0F;
-	public float wallHitSpeedLoss = 0F;
-	public int wallHitCooldown = 0;
-	public float degradeForceLossPerMeter = 0F;
-	public int degradeForceLossStartFrom = 0;
-	public float degradeForceMaxLoss = 0F;
 
-	public static BoatSettings fromNetwork(FriendlyByteBuf buf) {
-		BoatSettings settings = new BoatSettings();
-		int size = buf.readVarInt();
-		settings.frictionOverrides = new Object2FloatOpenHashMap<>(size);
-		for (int i = 0; i < size; i++) {
-			settings.frictionOverrides.put(BuiltInRegistries.BLOCK.byId(buf.readVarInt()), buf.readFloat());
-		}
-		settings.frictionOverrides = Object2FloatMaps.unmodifiable(settings.frictionOverrides);
-		settings.forwardForce = buf.readFloat();
-		settings.backwardForce = buf.readFloat();
-		settings.turningForce = buf.readFloat();
-		settings.turningForceInAir = buf.readFloat();
-		settings.stepUpHeight = buf.readFloat();
-		settings.outOfControlTicks = buf.readFloat();
-		settings.boostingBlock = BuiltInRegistries.BLOCK.byId(buf.readVarInt());
-		settings.boostingTicks = buf.readVarInt();
-		settings.boostingForce = buf.readFloat();
-		settings.ejectingBlock = BuiltInRegistries.BLOCK.byId(buf.readVarInt());
-		settings.ejectingForce = buf.readFloat();
-		settings.wallHitSpeedLoss = buf.readFloat();
-		settings.wallHitCooldown = buf.readVarInt();
-		settings.degradeForceLossPerMeter = buf.readFloat();
-		settings.degradeForceLossStartFrom = buf.readVarInt();
-		settings.degradeForceMaxLoss = buf.readFloat();
-		return settings;
-	}
+	public static final Codec<BoatSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+					Codec.simpleMap(
+							BuiltInRegistries.BLOCK.byNameCodec(),
+							Codec.FLOAT,
+							BuiltInRegistries.BLOCK).<Reference2FloatMap<Block>>xmap(
+							Reference2FloatOpenHashMap::new,
+							Reference2FloatMaps::unmodifiable).fieldOf("frictionOverrides").forGetter(BoatSettings::frictionOverrides),
+					Codec.FLOAT.fieldOf("forwardForce").forGetter(BoatSettings::forwardForce),
+					Codec.FLOAT.fieldOf("backwardForce").forGetter(BoatSettings::backwardForce),
+					Codec.FLOAT.fieldOf("turningForce").forGetter(BoatSettings::turningForce),
+					Codec.FLOAT.fieldOf("turningForceInAir").forGetter(BoatSettings::turningForceInAir),
+					Codec.FLOAT.fieldOf("stepUpHeight").forGetter(BoatSettings::stepUpHeight),
+					Codec.FLOAT.fieldOf("outOfControlTicks").forGetter(BoatSettings::outOfControlTicks),
+					BuiltInRegistries.BLOCK.byNameCodec().fieldOf("boostingBlock").forGetter(BoatSettings::boostingBlock),
+					Codec.INT.fieldOf("boostingTicks").forGetter(BoatSettings::boostingTicks),
+					Codec.FLOAT.fieldOf("boostingForce").forGetter(BoatSettings::boostingForce),
+					BuiltInRegistries.BLOCK.byNameCodec().fieldOf("ejectingBlock").forGetter(BoatSettings::ejectingBlock),
+					Codec.FLOAT.fieldOf("ejectingForce").forGetter(BoatSettings::ejectingForce),
+					Codec.FLOAT.fieldOf("wallHitSpeedLoss").forGetter(BoatSettings::wallHitSpeedLoss),
+					Codec.INT.fieldOf("wallHitCooldown").forGetter(BoatSettings::wallHitCooldown),
+					Codec.FLOAT.fieldOf("degradeForceLossPerMeter").forGetter(BoatSettings::degradeForceLossPerMeter),
+					Codec.mapPair(Codec.INT.fieldOf("degradeForceLossStartFrom"), Codec.FLOAT.fieldOf("degradeForceMaxLoss"))
+							.forGetter(it -> Pair.of(it.degradeForceLossStartFrom(), it.degradeForceMaxLoss())))
+			.apply(instance, BoatSettings::new));
+	public static final StreamCodec<ByteBuf, BoatSettings> STREAM_CODEC = ByteBufCodecs.fromCodec(CODEC);
 
-	public static void fromNBT(CompoundTag tag, BoatSettings settings) {
-		CompoundTag overridesTag = tag.getCompound("frictionOverrides");
-		settings.frictionOverrides = new Object2FloatOpenHashMap<>(overridesTag.size());
-		for (String key : overridesTag.getAllKeys()) {
-			Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(key));
-			if (block != Blocks.AIR) {
-				settings.frictionOverrides.put(block, overridesTag.getFloat(key));
-			}
-		}
-		settings.frictionOverrides = Object2FloatMaps.unmodifiable(settings.frictionOverrides);
-		settings.forwardForce = tag.getFloat("forwardForce");
-		settings.backwardForce = tag.getFloat("backwardForce");
-		settings.turningForce = tag.getFloat("turningForce");
-		settings.turningForceInAir = tag.getFloat("turningForceInAir");
-		settings.stepUpHeight = tag.getFloat("stepUpHeight");
-		settings.outOfControlTicks = tag.getFloat("outOfControlTicks");
-		settings.boostingBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(tag.getString("boostingBlock")));
-		settings.boostingTicks = tag.getInt("boostingTicks");
-		settings.boostingForce = tag.getFloat("boostingForce");
-		settings.ejectingBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(tag.getString("ejectingBlock")));
-		settings.ejectingForce = tag.getFloat("ejectingForce");
-		settings.wallHitSpeedLoss = tag.getFloat("wallHitSpeedLoss");
-		settings.wallHitCooldown = tag.getInt("wallHitCooldown");
-		settings.degradeForceLossPerMeter = tag.getFloat("degradeForceLossPerMeter");
-		settings.degradeForceLossStartFrom = tag.getInt("degradeForceLossStartFrom");
-		settings.degradeForceMaxLoss = tag.getFloat("degradeForceMaxLoss");
+	public BoatSettings(
+			Reference2FloatMap<Block> frictionOverrides,
+			float forwardForce,
+			float backwardForce,
+			float turningForce,
+			float turningForceInAir,
+			float stepUpHeight,
+			float outOfControlTicks,
+			Block boostingBlock,
+			int boostingTicks,
+			float boostingForce,
+			Block ejectingBlock,
+			float ejectingForce,
+			float wallHitSpeedLoss,
+			int wallHitCooldown,
+			float degradeForceLossPerMeter,
+			Pair<Integer, Float> pair0) {
+		this(
+				frictionOverrides,
+				forwardForce,
+				backwardForce,
+				turningForce,
+				turningForceInAir,
+				stepUpHeight,
+				outOfControlTicks,
+				boostingBlock,
+				boostingTicks,
+				boostingForce,
+				ejectingBlock,
+				ejectingForce,
+				wallHitSpeedLoss,
+				wallHitCooldown,
+				degradeForceLossPerMeter,
+				pair0.getFirst(),
+				pair0.getSecond());
 	}
 
 	public static BoatSettings fromLocal() {
-		BoatSettings settings = new BoatSettings();
-		settings.frictionOverrides = new Object2FloatOpenHashMap<>(BoatTweaksCommonConfig.frictionOverrides.size());
-		BoatTweaksCommonConfig.frictionOverrides.forEach((k, v) -> {
-			Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(k));
-			if (block != Blocks.AIR) {
-				settings.frictionOverrides.put(block, v.floatValue());
-			}
-		});
-		settings.frictionOverrides = Object2FloatMaps.unmodifiable(settings.frictionOverrides);
-		settings.forwardForce = BoatTweaksCommonConfig.forwardForce;
-		settings.backwardForce = BoatTweaksCommonConfig.backwardForce;
-		settings.turningForce = BoatTweaksCommonConfig.turningForce;
-		settings.turningForceInAir = BoatTweaksCommonConfig.turningForceInAir;
-		settings.stepUpHeight = BoatTweaksCommonConfig.stepUpHeight;
-		settings.outOfControlTicks = BoatTweaksCommonConfig.outOfControlTicks;
-		settings.boostingBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(BoatTweaksCommonConfig.boostingBlock));
-		settings.boostingTicks = BoatTweaksCommonConfig.boostingTicks;
-		settings.boostingForce = BoatTweaksCommonConfig.boostingForce;
-		settings.ejectingBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(BoatTweaksCommonConfig.ejectingBlock));
-		settings.ejectingForce = BoatTweaksCommonConfig.ejectingForce;
-		settings.wallHitSpeedLoss = BoatTweaksCommonConfig.wallHitSpeedLoss;
-		settings.wallHitCooldown = BoatTweaksCommonConfig.wallHitCooldown;
-		settings.degradeForceLossPerMeter = BoatTweaksCommonConfig.degradeForceLossPerMeter;
-		settings.degradeForceLossStartFrom = BoatTweaksCommonConfig.degradeForceLossStartFrom;
-		settings.degradeForceMaxLoss = BoatTweaksCommonConfig.degradeForceMaxLoss;
-		return settings;
+		return new BoatSettings(
+				BoatTweaksCommonConfig.frictionOverrides.entrySet()
+						.stream()
+						.reduce(new Reference2FloatOpenHashMap<>(BoatTweaksCommonConfig.frictionOverrides.size()), (acc, entry) -> {
+							var block = BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(entry.getKey()));
+							if (block != Blocks.AIR) {
+								acc.put(block, entry.getValue().floatValue());
+							}
+							return acc;
+						}, (first, second) -> second),
+				BoatTweaksCommonConfig.forwardForce,
+				BoatTweaksCommonConfig.backwardForce,
+				BoatTweaksCommonConfig.turningForce,
+				BoatTweaksCommonConfig.turningForceInAir,
+				BoatTweaksCommonConfig.stepUpHeight,
+				BoatTweaksCommonConfig.outOfControlTicks,
+				BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(BoatTweaksCommonConfig.boostingBlock)),
+				BoatTweaksCommonConfig.boostingTicks,
+				BoatTweaksCommonConfig.boostingForce,
+				BuiltInRegistries.BLOCK.get(ResourceLocation.tryParse(BoatTweaksCommonConfig.ejectingBlock)),
+				BoatTweaksCommonConfig.ejectingForce,
+				BoatTweaksCommonConfig.wallHitSpeedLoss,
+				BoatTweaksCommonConfig.wallHitCooldown,
+				BoatTweaksCommonConfig.degradeForceLossPerMeter,
+				BoatTweaksCommonConfig.degradeForceLossStartFrom,
+				BoatTweaksCommonConfig.degradeForceMaxLoss);
 	}
 
-	public void toNetwork(FriendlyByteBuf buf) {
-		buf.writeVarInt(frictionOverrides.size());
-		frictionOverrides.forEach((k, v) -> {
-			buf.writeVarInt(BuiltInRegistries.BLOCK.getId(k));
-			buf.writeFloat(v);
-		});
-		buf.writeFloat(forwardForce);
-		buf.writeFloat(backwardForce);
-		buf.writeFloat(turningForce);
-		buf.writeFloat(turningForceInAir);
-		buf.writeFloat(stepUpHeight);
-		buf.writeFloat(outOfControlTicks);
-		buf.writeVarInt(BuiltInRegistries.BLOCK.getId(boostingBlock));
-		buf.writeVarInt(boostingTicks);
-		buf.writeFloat(boostingForce);
-		buf.writeVarInt(BuiltInRegistries.BLOCK.getId(ejectingBlock));
-		buf.writeFloat(ejectingForce);
-		buf.writeFloat(wallHitSpeedLoss);
-		buf.writeVarInt(wallHitCooldown);
-		buf.writeFloat(degradeForceLossPerMeter);
-		buf.writeVarInt(degradeForceLossStartFrom);
-		buf.writeFloat(degradeForceMaxLoss);
+	public BoatSettings(
+	) {
+		this(
+
+				Reference2FloatMaps.emptyMap(), 0.04F, 0.005F, 1F, 1F, 0F, 60F, Blocks.AIR, 0, 0F, Blocks.AIR, 0F, 0F, 0, 0F, 0, 0F);
 	}
 
-	public CompoundTag toNBT() {
-		CompoundTag tag = new CompoundTag();
-		CompoundTag overridesTag = new CompoundTag();
-		frictionOverrides.forEach((k, v) -> overridesTag.putFloat(BuiltInRegistries.BLOCK.getKey(k).toString(), v));
-		tag.put("frictionOverrides", overridesTag);
-		tag.putFloat("forwardForce", forwardForce);
-		tag.putFloat("backwardForce", backwardForce);
-		tag.putFloat("turningForce", turningForce);
-		tag.putFloat("turningForceInAir", turningForceInAir);
-		tag.putFloat("stepUpHeight", stepUpHeight);
-		tag.putFloat("outOfControlTicks", outOfControlTicks);
-		tag.putString("boostingBlock", BuiltInRegistries.BLOCK.getKey(boostingBlock).toString());
-		tag.putInt("boostingTicks", boostingTicks);
-		tag.putFloat("boostingForce", boostingForce);
-		tag.putString("ejectingBlock", BuiltInRegistries.BLOCK.getKey(ejectingBlock).toString());
-		tag.putFloat("ejectingForce", ejectingForce);
-		tag.putFloat("wallHitSpeedLoss", wallHitSpeedLoss);
-		tag.putInt("wallHitCooldown", wallHitCooldown);
-		tag.putFloat("degradeForceLossPerMeter", degradeForceLossPerMeter);
-		tag.putInt("degradeForceLossStartFrom", degradeForceLossStartFrom);
-		tag.putFloat("degradeForceMaxLoss", degradeForceMaxLoss);
-		return tag;
-	}
-
-	public float getFriction(Block block) {
-		return frictionOverrides.getOrDefault(block, block.getFriction());
-	}
-
-	public BoatSettings copy() {
-		BoatSettings settings = new BoatSettings();
-		settings.frictionOverrides = frictionOverrides;
-		settings.forwardForce = forwardForce;
-		settings.backwardForce = backwardForce;
-		settings.turningForce = turningForce;
-		settings.turningForceInAir = turningForceInAir;
-		settings.stepUpHeight = stepUpHeight;
-		settings.outOfControlTicks = outOfControlTicks;
-		settings.boostingBlock = boostingBlock;
-		settings.boostingTicks = boostingTicks;
-		settings.boostingForce = boostingForce;
-		settings.ejectingBlock = ejectingBlock;
-		settings.ejectingForce = ejectingForce;
-		settings.wallHitSpeedLoss = wallHitSpeedLoss;
-		settings.wallHitCooldown = wallHitCooldown;
-		settings.degradeForceLossPerMeter = degradeForceLossPerMeter;
-		settings.degradeForceLossStartFrom = degradeForceLossStartFrom;
-		settings.degradeForceMaxLoss = degradeForceMaxLoss;
-		return settings;
-	}
 
 	public float getDegradedForce(float force, float distance) {
 		if (degradeForceMaxLoss == 0 || degradeForceLossPerMeter == 0 || distance <= degradeForceLossStartFrom) {

@@ -1,32 +1,46 @@
 package snownee.boattweaks.network;
 
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
-import org.jetbrains.annotations.Nullable;
-
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import snownee.boattweaks.BoatTweaks;
 import snownee.boattweaks.duck.BTServerPlayer;
+import snownee.kiwi.network.KPacketSender;
 import snownee.kiwi.network.KiwiPacket;
-import snownee.kiwi.network.PacketHandler;
+import snownee.kiwi.network.PayloadContext;
+import snownee.kiwi.network.PlayPacketHandler;
 
-@KiwiPacket(value = "ping_server", dir = KiwiPacket.Direction.PLAY_TO_SERVER)
-public class CPingServerPacket extends PacketHandler {
-	public static CPingServerPacket I;
+@KiwiPacket
+public class CPingServerPacket implements CustomPacketPayload {
+	public static final Type<CPingServerPacket> TYPE = new CustomPacketPayload.Type<>(BoatTweaks.RL("ping"));
+	public static final CPingServerPacket INSTANCE = new CPingServerPacket();
 
 	public static void ping() {
-		I.sendToServer(buf -> {
-		});
+		KPacketSender.sendToServer(INSTANCE);
 	}
 
 	@Override
-	public CompletableFuture<FriendlyByteBuf> receive(Function<Runnable, CompletableFuture<FriendlyByteBuf>> executor, FriendlyByteBuf buf, @Nullable ServerPlayer player) {
-		return executor.apply(() -> {
-			BoatTweaks.LOGGER.info("Received config from {}", Objects.requireNonNull(player).getGameProfile().getName());
-			((BTServerPlayer) player).boattweaks$setVerified(true);
-		});
+	public Type<? extends CustomPacketPayload> type() {
+		return TYPE;
+	}
+
+	public static final class Handler implements PlayPacketHandler<CPingServerPacket> {
+		public static final StreamCodec<RegistryFriendlyByteBuf, CPingServerPacket> STREAM_CODEC = StreamCodec.unit(INSTANCE);
+
+		@Override
+		public void handle(CPingServerPacket packet, PayloadContext context) {
+			context.execute(() -> {
+				var player = context.serverPlayer();
+				BoatTweaks.LOGGER.info("Received config from {}", Objects.requireNonNull(player).getGameProfile().getName());
+				((BTServerPlayer) player).boattweaks$setVerified(true);
+			});
+		}
+
+		@Override
+		public StreamCodec<RegistryFriendlyByteBuf, CPingServerPacket> streamCodec() {
+			return STREAM_CODEC;
+		}
 	}
 }

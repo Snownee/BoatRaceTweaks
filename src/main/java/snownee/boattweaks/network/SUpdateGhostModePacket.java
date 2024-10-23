@@ -1,33 +1,48 @@
 package snownee.boattweaks.network;
 
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-
-import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import snownee.boattweaks.BoatTweaks;
 import snownee.boattweaks.duck.BTClientPacketListener;
 import snownee.kiwi.network.KiwiPacket;
-import snownee.kiwi.network.PacketHandler;
+import snownee.kiwi.network.PayloadContext;
+import snownee.kiwi.network.PlayPacketHandler;
 
-@KiwiPacket(value = "update_ghost_mode", dir = KiwiPacket.Direction.PLAY_TO_CLIENT)
-public class SUpdateGhostModePacket extends PacketHandler {
+@KiwiPacket
+public record SUpdateGhostModePacket(
+		boolean value
+) implements CustomPacketPayload {
+	public static final CustomPacketPayload.Type<SUpdateGhostModePacket> TYPE = new CustomPacketPayload.Type<>(BoatTweaks.RL(
+			"update_ghost_mode"));
 	public static SUpdateGhostModePacket I;
 
-	public static void sync(ServerPlayer player, boolean value) {
-		I.send(player, buf -> {
-			buf.writeBoolean(value);
-		});
+	@Override
+	public Type<? extends CustomPacketPayload> type() {
+		return TYPE;
 	}
 
-	@Override
-	public CompletableFuture<FriendlyByteBuf> receive(Function<Runnable, CompletableFuture<FriendlyByteBuf>> executor, FriendlyByteBuf buf, @Nullable ServerPlayer player) {
-		boolean value = buf.readBoolean();
-		return executor.apply(() -> {
-			((BTClientPacketListener) Objects.requireNonNull(Minecraft.getInstance().getConnection())).boattweaks$setGhostMode(value);
-		});
+	public static final class Handler implements PlayPacketHandler<SUpdateGhostModePacket> {
+		public static final StreamCodec<RegistryFriendlyByteBuf, SUpdateGhostModePacket> STREAM_CODEC = StreamCodec.composite(
+				ByteBufCodecs.BOOL,
+				SUpdateGhostModePacket::value,
+				SUpdateGhostModePacket::new
+		);
+
+		@Override
+		public void handle(SUpdateGhostModePacket packet, PayloadContext context) {
+			context.execute(() -> (
+					(BTClientPacketListener) Objects.requireNonNull(Minecraft.getInstance()
+							.getConnection())).boattweaks$setGhostMode(packet.value()));
+		}
+
+		@Override
+		public StreamCodec<RegistryFriendlyByteBuf, SUpdateGhostModePacket> streamCodec() {
+			return STREAM_CODEC;
+		}
 	}
 }

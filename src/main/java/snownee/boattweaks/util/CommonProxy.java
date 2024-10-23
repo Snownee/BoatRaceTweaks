@@ -13,6 +13,7 @@ import snownee.boattweaks.network.SSyncSettingsPacket;
 import snownee.boattweaks.network.SUpdateGhostModePacket;
 import snownee.kiwi.Mod;
 import snownee.kiwi.config.KiwiConfigManager;
+import snownee.kiwi.network.KPacketSender;
 
 @Mod(BoatTweaks.ID)
 public class CommonProxy implements ModInitializer {
@@ -24,7 +25,9 @@ public class CommonProxy implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		version = FabricLoader.getInstance().getModContainer(BoatTweaks.ID).map(container -> container.getMetadata().getVersion().getFriendlyString()).orElseThrow();
+		version = FabricLoader.getInstance().getModContainer(BoatTweaks.ID).map(container -> container.getMetadata()
+				.getVersion()
+				.getFriendlyString()).orElseThrow();
 		// Currently in 1.19.2, the serverInit method has a bug that it will not be called for integrated server.
 		ServerLifecycleEvents.SERVER_STARTING.register($ -> {
 			if (!$.isDedicatedServer()) {
@@ -33,9 +36,9 @@ public class CommonProxy implements ModInitializer {
 			BoatTweaksCommonConfig.refresh();
 		});
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-			SSyncSettingsPacket.sync(handler.player, BoatSettings.DEFAULT, Integer.MIN_VALUE);
+			KPacketSender.send(new SSyncSettingsPacket(BoatSettings.DEFAULT, Integer.MIN_VALUE), handler.player);
 			if (handler.player.level().getGameRules().getBoolean(BoatTweaks.GHOST_MODE)) {
-				SUpdateGhostModePacket.sync(handler.player, true);
+				KPacketSender.send(new SUpdateGhostModePacket(true), handler.player);
 			}
 		});
 		ServerPlayerEvents.COPY_FROM.register((oldPlayer, newPlayer, alive) -> {

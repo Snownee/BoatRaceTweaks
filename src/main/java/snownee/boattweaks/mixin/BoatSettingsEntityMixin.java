@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.Boat;
 import snownee.boattweaks.BoatTweaksUtil;
 import snownee.boattweaks.network.SSyncSettingsPacket;
+import snownee.kiwi.network.KPacketSender;
 
 @Mixin(Entity.class)
 public class BoatSettingsEntityMixin {
@@ -17,7 +18,7 @@ public class BoatSettingsEntityMixin {
 	private void startSeenByPlayer(ServerPlayer player, CallbackInfo ci) {
 		Entity entity = (Entity) (Object) this;
 		if (entity instanceof Boat boat && !BoatTweaksUtil.isDefaultSettings(boat)) {
-			SSyncSettingsPacket.sync(player, boat);
+			KPacketSender.send(new SSyncSettingsPacket(BoatTweaksUtil.getBoatSettings(boat), boat.getId()), player);
 		}
 	}
 }
