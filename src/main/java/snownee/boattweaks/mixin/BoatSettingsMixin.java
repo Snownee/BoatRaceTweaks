@@ -9,11 +9,17 @@ import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.vehicle.Boat;
+import net.minecraft.world.entity.vehicle.VehicleEntity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import snownee.boattweaks.BoatSettings;
 import snownee.boattweaks.duck.BTBoostingBoat;
@@ -21,7 +27,7 @@ import snownee.boattweaks.duck.BTConfigurableBoat;
 import snownee.boattweaks.duck.BTMovementDistance;
 
 @Mixin(value = Boat.class, priority = 900)
-public class BoatSettingsMixin implements BTConfigurableBoat {
+public abstract class BoatSettingsMixin extends VehicleEntity implements BTConfigurableBoat {
 
 	@Shadow
 	private Boat.Status status;
@@ -41,20 +47,18 @@ public class BoatSettingsMixin implements BTConfigurableBoat {
 	@Nullable
 	private BoatSettings settings;
 
-	@Inject(method = "<init>(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/level/Level;)V", at = @At("RETURN"))
-	private void init(CallbackInfo ci) {
-		Boat boat = (Boat) (Object) this;
-		boat.setMaxUpStep(BoatSettings.DEFAULT.stepUpHeight);
+	private BoatSettingsMixin(final EntityType<?> entityType, final Level level) {
+		super(entityType, level);
 	}
 
-	//TODO (1.21): use MixinExtras
-	@Redirect(
-			method = "getGroundFriction", at = @At(
-			value = "INVOKE", target = "Lnet/minecraft/world/level/block/Block;getFriction()F"
+	@WrapOperation(
+			method = "getGroundFriction",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/Block;getFriction()F")
 	)
-	)
-	private float getGroundFriction(Block block) {
-		return boattweaks$getSettings().getFriction(block);
+	private float getGroundFriction(final Block block, final Operation<Float> original) {
+		return boattweaks$getSettings().frictionOverrides().containsKey(block)
+				? boattweaks$getSettings().frictionOverrides().getFloat(block)
+				: original.call(block);
 	}
 
 	@ModifyVariable(method = "controlBoat", at = @At(value = "STORE", ordinal = 0), index = 1)
@@ -64,24 +68,24 @@ public class BoatSettingsMixin implements BTConfigurableBoat {
 		if (status == Boat.Status.ON_LAND) {
 			if (inputUp) {
 				BTBoostingBoat boat = (BTBoostingBoat) this;
-				f += settings.forwardForce - 0.04F + boat.boattweaks$getExtraForwardForce();
+				f += settings.forwardForce() - 0.04F + boat.boattweaks$getExtraForwardForce();
 			}
 			if (inputDown) {
-				f -= settings.backwardForce - 0.005F;
+				f -= settings.backwardForce() - 0.005F;
 			}
 			f = settings.getDegradedForce(f, distance);
 			if (inputLeft) {
-				deltaRotation += 1 - settings.getDegradedForce(settings.turningForce, distance);
+				deltaRotation += 1 - settings.getDegradedForce(settings.turningForce(), distance);
 			}
 			if (inputRight) {
-				deltaRotation -= 1 - settings.getDegradedForce(settings.turningForce, distance);
+				deltaRotation -= 1 - settings.getDegradedForce(settings.turningForce(), distance);
 			}
 		} else if (status == Boat.Status.IN_AIR) {
 			if (inputLeft) {
-				deltaRotation += 1 - settings.getDegradedForce(settings.turningForceInAir, distance);
+				deltaRotation += 1 - settings.getDegradedForce(settings.turningForceInAir(), distance);
 			}
 			if (inputRight) {
-				deltaRotation -= 1 - settings.getDegradedForce(settings.turningForceInAir, distance);
+				deltaRotation -= 1 - settings.getDegradedForce(settings.turningForceInAir(), distance);
 			}
 		}
 		return f;
@@ -94,30 +98,28 @@ public class BoatSettingsMixin implements BTConfigurableBoat {
 			wallHitCd--;
 		} else if (boat.horizontalCollision) {
 			BoatSettings settings = boattweaks$getSettings();
-			wallHitCd = settings.wallHitCooldown;
-			float scale = 1 - settings.wallHitSpeedLoss;
+			wallHitCd = settings.wallHitCooldown();
+			float scale = 1 - settings.wallHitSpeedLoss();
 			boat.setDeltaMovement(boat.getDeltaMovement().multiply(scale, 1, scale));
 		}
 	}
 
 	@ModifyConstant(method = "tick", constant = @Constant(floatValue = 60F))
 	private float modifyTimeOutTicks(float f) {
-		return boattweaks$getSettings().outOfControlTicks;
+		return boattweaks$getSettings().outOfControlTicks();
 	}
 
 	@Inject(method = "addAdditionalSaveData", at = @At("TAIL"))
 	private void addAdditionalSaveData(CompoundTag compoundTag, CallbackInfo ci) {
 		if (settings != null) {
-			compoundTag.put("BoatTweaksSettings", settings.toNBT());
+			compoundTag.put("BoatTweaksSettings", BoatSettings.CODEC.encodeStart(NbtOps.INSTANCE, settings).getOrThrow());
 		}
 	}
 
 	@Inject(method = "readAdditionalSaveData", at = @At("TAIL"))
 	private void readAdditionalSaveData(CompoundTag compoundTag, CallbackInfo ci) {
 		if (compoundTag.contains("BoatTweaksSettings")) {
-			BoatSettings settings = new BoatSettings();
-			BoatSettings.fromNBT(compoundTag.getCompound("BoatTweaksSettings"), settings);
-			boattweaks$setSettings(settings);
+			boattweaks$setSettings(BoatSettings.CODEC.parse(NbtOps.INSTANCE, compoundTag.getCompound("BoatTweaksSettings")).getOrThrow());
 		}
 	}
 
@@ -132,8 +134,10 @@ public class BoatSettingsMixin implements BTConfigurableBoat {
 	@Override
 	public void boattweaks$setSettings(@Nullable BoatSettings settings) {
 		this.settings = settings;
-		Boat boat = (Boat) (Object) this;
-		boat.setMaxUpStep(boattweaks$getSettings().stepUpHeight);
 	}
 
+	@Override
+	public float maxUpStep() {
+		return boattweaks$getSettings().stepUpHeight();
+	}
 }

@@ -4,20 +4,14 @@ import java.util.Objects;
 
 import org.jetbrains.annotations.Nullable;
 
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import snownee.boattweaks.duck.BTClientPacketListener;
 import snownee.boattweaks.duck.BTConfigurableBoat;
 import snownee.boattweaks.duck.BTMovementDistance;
 
 public class BoatTweaksUtil {
-	public static Object2IntMap<Block> getCustomSpecialBlocks() {
-		return BoatTweaks.CUSTOM_SPECIAL_BLOCKS;
-	}
-
 	public static boolean isClientSide(Level level, String method) {
 		if (level.isClientSide) {
 			BoatTweaks.LOGGER.warn("BoatTweaksUtil#{} can only be called on server side.", method);

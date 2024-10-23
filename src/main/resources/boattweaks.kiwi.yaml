@@ -1,0 +1,17 @@
+configs:
+  - data: {type: CLIENT}
+    target: snownee.boattweaks.BoatTweaksClientConfig
+  - data: {}
+    target: snownee.boattweaks.BoatTweaksCommonConfig
+modules:
+  - data: {}
+    target: snownee.boattweaks.BoatTweaks
+packets:
+  - data: {}
+    target: snownee.boattweaks.network.CPingServerPacket
+  - data: {}
+    target: snownee.boattweaks.network.SSyncDistancePacket
+  - data: {}
+    target: snownee.boattweaks.network.SSyncSettingsPacket
+  - data: {}
+    target: snownee.boattweaks.network.SUpdateGhostModePacket

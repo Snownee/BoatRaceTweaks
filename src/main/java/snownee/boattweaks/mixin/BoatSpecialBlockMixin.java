@@ -10,17 +10,17 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
-import it.unimi.dsi.fastutil.objects.Object2IntOpenCustomHashMap;
-import net.minecraft.Util;
+import com.llamalad7.mixinextras.sugar.Local;
+
+import it.unimi.dsi.fastutil.objects.Reference2IntMap;
+import it.unimi.dsi.fastutil.objects.Reference2IntMaps;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import snownee.boattweaks.BoatSettings;
 import snownee.boattweaks.BoatTweaks;
 import snownee.boattweaks.duck.BTBoostingBoat;
@@ -31,7 +31,7 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 
 	@Final
 	@Unique
-	private Object2IntOpenCustomHashMap<Block> specialBlockCooldowns;
+	private Reference2IntMap<Block> specialBlockCooldowns;
 	@Unique
 	private final Map<Block, BlockPos> specialBlockRecords = new IdentityHashMap<>(Math.min(BoatTweaks.CUSTOM_SPECIAL_BLOCKS.size(), 10));
 	@Unique
@@ -42,23 +42,32 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 	@Inject(method = "<init>*", at = @At("RETURN"))
 	private void init(final CallbackInfo ci) {
 		//noinspection ShadowFinalModification
-		specialBlockCooldowns = new Object2IntOpenCustomHashMap<>(
-				Math.min(BoatTweaks.CUSTOM_SPECIAL_BLOCKS.size(), 10),
-				Util.identityStrategy()
-		);
+		specialBlockCooldowns = new Reference2IntOpenHashMap<>(Math.min(BoatTweaks.CUSTOM_SPECIAL_BLOCKS.size(), 10));
 	}
 
 	@Inject(
-			method = "getGroundFriction", at = @At(
-			value = "INVOKE", target = "Lnet/minecraft/world/level/block/state/BlockState;getBlock()Lnet/minecraft/world/level/block/Block;", ordinal = 1
-	), locals = LocalCapture.CAPTURE_FAILHARD
+			method = "getGroundFriction",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/world/level/block/Block;getFriction()F")
 	)
-	private void getGroundFriction(CallbackInfoReturnable<Float> cir, AABB aABB, AABB aABB2, int i, int j, int k, int l, int m, int n, VoxelShape voxelShape, float f, int o, BlockPos.MutableBlockPos pos, int p, int q, int r, int s, BlockState blockState) {
+	private void getGroundFriction(
+			final CallbackInfoReturnable<Float> cir,
+			@Local BlockPos.MutableBlockPos pos,
+			@Local BlockState blockState) {
 		Boat boat = (Boat) (Object) this;
 		BoatSettings settings = ((BTConfigurableBoat) boat).boattweaks$getSettings();
-		if (boat.isControlledByLocalInstance() && blockState.is(settings.ejectingBlock)) {
+		if (boat.isControlledByLocalInstance() && blockState.is(settings.ejectingBlock())) {
 			if (this.eject == 0 && boat.level().isClientSide && !boat.isSilent()) {
-				boat.level().playLocalSound(boat.getX(), boat.getY(), boat.getZ(), BoatTweaks.EJECT.get(), boat.getSoundSource(), 1.0F, 1.0F, false);
+				boat.level().playLocalSound(
+						boat.getX(),
+						boat.getY(),
+						boat.getZ(),
+						BoatTweaks.EJECT.get(),
+						boat.getSoundSource(),
+						1.0F,
+						1.0F,
+						false);
 			}
 			int eject = 1;
 			int y = pos.getY();
@@ -66,7 +75,7 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 			while (true) {
 				pos.setY(y - eject);
 				blockState1 = boat.level().getBlockState(pos);
-				if (!blockState1.is(settings.ejectingBlock)) {
+				if (!blockState1.is(settings.ejectingBlock())) {
 					break;
 				}
 				eject++;
@@ -74,11 +83,11 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 			this.eject = Math.max(this.eject, eject);
 			pos.setY(y);
 		}
-		if (boostTicks < settings.boostingTicks && blockState.is(settings.boostingBlock)) {
-			if (settings.boostingTicks - boostTicks > 10) {
+		if (boostTicks < settings.boostingTicks() && blockState.is(settings.boostingBlock())) {
+			if (settings.boostingTicks() - boostTicks > 10) {
 				boat.playSound(BoatTweaks.BOOST.get());
 			}
-			boostTicks = settings.boostingTicks;
+			boostTicks = settings.boostingTicks();
 		}
 		Block block = blockState.getBlock();
 		int cooldown = BoatTweaks.CUSTOM_SPECIAL_BLOCKS.getInt(block);
@@ -95,9 +104,9 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 		if (eject > 0) {
 			float force;
 			if (eject == 1) {
-				force = settings.ejectingForce;
+				force = settings.ejectingForce();
 			} else {
-				force = settings.ejectingForce * (float) (Math.pow(1.1, eject - 1));
+				force = settings.ejectingForce() * (float) (Math.pow(1.1, eject - 1));
 			}
 			eject = 0;
 			boat.setDeltaMovement(boat.getDeltaMovement().with(Direction.Axis.Y, force));
@@ -105,7 +114,8 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 		if (boostTicks > 0) {
 			boostTicks--;
 		}
-		specialBlockCooldowns.object2IntEntrySet().fastIterator().forEachRemaining(entry -> {
+
+		Reference2IntMaps.fastIterator(specialBlockCooldowns).forEachRemaining(entry -> {
 			Block block = entry.getKey();
 			int cooldown = entry.getIntValue();
 			if (BoatTweaks.CUSTOM_SPECIAL_BLOCKS.getInt(block) == cooldown) {
@@ -125,6 +135,6 @@ public abstract class BoatSpecialBlockMixin implements BTBoostingBoat {
 
 	@Override
 	public float boattweaks$getExtraForwardForce() {
-		return boostTicks > 0 ? ((BTConfigurableBoat) this).boattweaks$getSettings().boostingForce : 0;
+		return boostTicks > 0 ? ((BTConfigurableBoat) this).boattweaks$getSettings().boostingForce() : 0;
 	}
 }

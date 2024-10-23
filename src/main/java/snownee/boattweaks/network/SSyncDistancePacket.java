@@ -1,38 +1,54 @@
 package snownee.boattweaks.network;
 
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-
-import org.jetbrains.annotations.Nullable;
-
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.world.entity.vehicle.Boat;
+import snownee.boattweaks.BoatTweaks;
 import snownee.boattweaks.duck.BTMovementDistance;
 import snownee.kiwi.network.KiwiPacket;
-import snownee.kiwi.network.PacketHandler;
+import snownee.kiwi.network.PayloadContext;
+import snownee.kiwi.network.PlayPacketHandler;
 
-@KiwiPacket(value = "sync_distance", dir = KiwiPacket.Direction.PLAY_TO_CLIENT)
-public class SSyncDistancePacket extends PacketHandler {
-	public static SSyncDistancePacket I;
+@KiwiPacket
+public record SSyncDistancePacket(
+		int entityId,
+		float distance
+) implements CustomPacketPayload {
+	public static final CustomPacketPayload.Type<SSyncDistancePacket> TYPE = new CustomPacketPayload.Type<>(BoatTweaks.RL("sync_distance"));
 
-	public static void sync(Boat boat, ServerPlayer player) {
-		I.send(player, buf -> {
-			buf.writeInt(boat.getId());
-			buf.writeFloat(((BTMovementDistance) boat).boattweaks$getDistance());
-		});
+	public SSyncDistancePacket(Boat boat) {
+		this(boat.getId(), ((BTMovementDistance) boat).boattweaks$getDistance());
 	}
 
 	@Override
-	public CompletableFuture<FriendlyByteBuf> receive(Function<Runnable, CompletableFuture<FriendlyByteBuf>> executor, FriendlyByteBuf buf, @Nullable ServerPlayer player) {
-		int entityId = buf.readInt();
-		float distance = buf.readFloat();
-		return executor.apply(() -> {
-			if (Objects.requireNonNull(Minecraft.getInstance().level).getEntity(entityId) instanceof Boat boat) {
-				((BTMovementDistance) boat).boattweaks$setDistance(distance);
-			}
-		});
+	public Type<? extends CustomPacketPayload> type() {
+		return TYPE;
+	}
+
+	public static final class Handler implements PlayPacketHandler<SSyncDistancePacket> {
+		public static final StreamCodec<RegistryFriendlyByteBuf, SSyncDistancePacket> STREAM_CODEC = StreamCodec.composite(
+				ByteBufCodecs.INT,
+				SSyncDistancePacket::entityId,
+				ByteBufCodecs.FLOAT,
+				SSyncDistancePacket::distance,
+				SSyncDistancePacket::new
+		);
+
+		@Override
+		public void handle(SSyncDistancePacket packet, PayloadContext context) {
+			context.execute(() -> {
+				if (Minecraft.getInstance().level.getEntity(packet.entityId()) instanceof Boat boat) {
+					((BTMovementDistance) boat).boattweaks$setDistance(packet.distance());
+				}
+			});
+		}
+
+		@Override
+		public StreamCodec<RegistryFriendlyByteBuf, SSyncDistancePacket> streamCodec() {
+			return STREAM_CODEC;
+		}
 	}
 }
