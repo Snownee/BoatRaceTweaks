@@ -53,14 +53,7 @@ repositories {
     }
 }
 
-sourceSets {
-    create("fabric")
-}
-
 val mainImplementation by configurations.creating
-val fabricImplementation by configurations.getting {
-    isCanBeResolved = true
-}
 
 unimined.minecraft {
     version(catalog.versions.minecraft.get())
@@ -85,11 +78,6 @@ val include by configurations.getting
 
 dependencies {
     modImplementation(unimined.fabricApi.fabric(catalog.versions.fabric.api.get()))
-
-    catalog.autocodec.let {
-        implementation(it)
-        include(it)
-    }
 
     modImplementation(catalog.kiwi)
     modImplementation(catalog.boathud)
